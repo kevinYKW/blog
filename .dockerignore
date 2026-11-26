@@ -1,0 +1,11 @@
+**
+!blog-web/
+!blog-web/package.json
+!blog-web/package-lock.json
+!blog-web/index.html
+!blog-web/tsconfig.json
+!blog-web/vite.config.ts
+!blog-web/src/
+!blog-web/src/**
+!deploy/
+!deploy/Caddyfile

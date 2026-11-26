@@ -1,0 +1,60 @@
+name: blog-production
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: blog_service
+      MYSQL_USER: blog
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./blog-bakend/migrations/000001_init_blog_service.up.sql:/docker-entrypoint-initdb.d/000001.sql:ro
+      - ./blog-bakend/migrations/000002_add_auth.up.sql:/docker-entrypoint-initdb.d/000002.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", 'MYSQL_PWD="$$MYSQL_PASSWORD" mysql -h 127.0.0.1 -u blog blog_service -e "SELECT 1 FROM blog_article LIMIT 0; SELECT 1 FROM blog_tag LIMIT 0; SELECT 1 FROM blog_user LIMIT 0; SELECT 1 FROM blog_session LIMIT 0;"']
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+
+  backend:
+    build: ./blog-bakend
+    restart: unless-stopped
+    environment:
+      BLOG_BIND_HOST: 0.0.0.0
+      BLOG_RUN_MODE: release
+      BLOG_DB_HOST: mysql:3306
+      BLOG_DB_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/api/v1/articles?page_size=1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/frontend.Dockerfile
+    restart: unless-stopped
+    environment:
+      BLOG_SITE_ADDRESS: ${BLOG_SITE_ADDRESS:?Set BLOG_SITE_ADDRESS}
+    ports:
+      - "${BLOG_HTTP_PORT:-80}:80"
+      - "${BLOG_HTTPS_PORT:-443}:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+  caddy_data:
+  caddy_config:
